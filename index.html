@@ -152,6 +152,18 @@ td.z{color:var(--muted)}
   </section>
 
   <section class="card">
+    <h2 id="regionTitle">Fordelt på landsdeler, hele perioden 2013–2025</h2>
+    <p class="sub" id="regionSub"></p>
+    <div class="grid2">
+      <div>
+        <div class="legend" id="legend3"></div>
+        <div class="chart" id="region"></div>
+      </div>
+      <div class="tbl-wrap"><table id="regionTable"></table></div>
+    </div>
+  </section>
+
+  <section class="card">
     <div class="card-head">
       <div>
         <h2>Tabell: kilometer per år</h2>
@@ -165,7 +177,7 @@ td.z{color:var(--muted)}
     <h2>Om tallene</h2>
     <p><b>Vei:</b> Kilometer riksvei åpnet for trafikk, fordelt på landsdel, utbygger (Statens vegvesen / Nye Veier) og veitype. To/tre-feltsvei er inkludert i tallet for tofeltsvei. Prosjekter som krysser fylkesgrenser er fordelt skjønnsmessig.</p>
     <p><b>Bane:</b> Kilometer jernbane åpnet for trafikk, fordelt på landsdel. All ny jernbane i oversikten er dobbeltsporet. Oversikten gjelder bare ny jernbane i ny trasé, og tar ikke med oppgraderinger, fornying, nye kryssingsspor eller nye spor i terminalområder.</p>
-    <p><b>Avgrensning:</b> Svaret inneholder også en prognose for 2026. Den er ikke tatt med her, siden siden viser 2013 til og med 2025. 2013 er med i årsoversikten, men inngår ikke i noen av periodene (2014–2017, 2018–2021, 2022–2025). Sørlandet har ingen ny jernbane og Nord-Norge ingen jernbane i perioden.</p>
+    <p><b>Avgrensning:</b> Svaret inneholder også en prognose for 2026. Den er ikke tatt med her, fordi siden viser 2013 til og med 2025. 2013 er med i årsoversikten, men inngår ikke i noen av periodene (2014–2017, 2018–2021, 2022–2025). Sørlandet har ingen ny jernbane og Nord-Norge ingen jernbane i perioden.</p>
     <p><b>Kilde:</b> Samferdselsdepartementet, <a href="kilde-svar-3935.pdf">svar på spørsmål nr. 3935 til skriftlig besvarelse</a> (ref. 26/3835), 5. oktober 2026.</p>
   </section>
 </div>
@@ -328,6 +340,79 @@ function stackedBars(el, labels, list, getVal, opts){
   });
 }
 
+/* ---------- horizontal stacked bars (landsdel, hele perioden) ---------- */
+function hBars(el, labels, list, getVal, opts){
+  const W = el.clientWidth || 600;
+  const rowH = 44, m = {t:8, r:56, b:8, l:96};
+  const H = m.t + m.b + rowH*labels.length;
+  const iw = W-m.l-m.r;
+  const totals = labels.map((_,i)=>list.reduce((a,s)=>a+getVal(s,i),0));
+  const max = Math.max(...totals, 1);
+  const x = v => m.l + v/max*iw;
+  const bh = 22;
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${opts.aria}">`;
+  labels.forEach((lab,i)=>{
+    const cy = m.t + rowH*i + rowH/2, y0 = cy-bh/2;
+    s+=`<text x="${m.l-10}" y="${cy+4}" text-anchor="end" font-size="13" fill="var(--text-2)">${lab}</text>`;
+    let acc=0;
+    const segs = list.map(sr=>({sr, v:getVal(sr,i)})).filter(d=>d.v>0);
+    segs.forEach((d,k)=>{
+      const xa = x(acc) + (k>0?2:0), xb = x(acc+d.v); acc+=d.v;
+      const w = Math.max(0.5, xb-xa), last = k===segs.length-1, r = last?Math.min(4,w/2):0;
+      s += r>0
+        ? `<path d="M${xa},${y0} H${xa+w-r} Q${xa+w},${y0} ${xa+w},${y0+r} V${y0+bh-r} Q${xa+w},${y0+bh} ${xa+w-r},${y0+bh} H${xa} Z" fill="var(${d.sr.color})"/>`
+        : `<rect x="${xa}" y="${y0}" width="${w}" height="${bh}" fill="var(${d.sr.color})"/>`;
+    });
+    s+=`<text x="${x(totals[i])+8}" y="${cy+4}" font-size="13" font-weight="600" fill="var(--text)">${totals[i]?fmt(totals[i]):'0'}</text>`;
+    s+=`<rect class="hit" data-i="${i}" x="0" y="${m.t+rowH*i}" width="${W}" height="${rowH}" fill="transparent"/>`;
+  });
+  s+=`<line x1="${m.l}" x2="${m.l}" y1="${m.t}" y2="${H-m.b}" stroke="var(--border)"/></svg>`;
+  el.innerHTML = s;
+  el.querySelectorAll('.hit').forEach(r=>{
+    const i=+r.dataset.i;
+    const on=e=>{ showTip(e, tipHtml(opts.tipTitle(labels[i]), list, sr=>getVal(sr,i))); r.setAttribute('fill','var(--grid)'); r.setAttribute('fill-opacity','.35'); };
+    r.addEventListener('mousemove',on); r.addEventListener('touchstart',e=>on(e.touches[0]),{passive:true});
+    r.addEventListener('mouseleave',()=>{hideTip(); r.setAttribute('fill','transparent');});
+  });
+}
+
+function renderRegions(){
+  const what = state.mode==='vei' ? 'riksvei' : 'jernbane';
+  const g = state.mode==='bane' ? 'l' : state.group;
+  const ft = filterText();
+  const rs = rows();
+  const regs = state.fL ? [state.fL] : LANDSDELER;
+  const sumRows = (pred, from, to) => rs.filter(pred).reduce((a,r)=>a+sumYears(r.v,from,to),0);
+  // Ved fordeling på landsdel: én farge per landsdel. Ellers: stablet på utbygger/veitype.
+  let list;
+  if(g==='l'){
+    list = regs.map(L=>({name:L, color:COLORS.l[L], v:[sumRows(r=>r.l===L,2013,2025)]}));
+  } else {
+    const filt = {u:state.fU, t:state.fT};
+    const cats = CATS[g].filter(c=>!filt[g]||c===filt[g]);
+    list = cats.map(c=>({name:c, color:COLORS[g][c], v:[sumRows(r=>r[g]===c,2013,2025)]}));
+  }
+  const getVal = g==='l'
+    ? (s,i)=> s.name===regs[i] ? s.v[0] : 0
+    : (s,i)=> sumRows(r=>r.l===regs[i] && r[g]===s.name, 2013, 2025);
+  $('regionTitle').textContent = `Ny ${what} fordelt på landsdeler, hele perioden 2013–2025`;
+  $('regionSub').textContent = `Sum kilometer åpnet for trafikk 2013–2025 per landsdel${g==='l'?'':', fordelt på '+GROUPNAME[g]}${ft}.`;
+  legend($('legend3'), g==='l' ? [] : list);
+  hBars($('region'), regs, list, getVal, {aria:`Liggende søylediagram: km ny ${what} per landsdel 2013–2025`, tipTitle:L=>`${L}, 2013–2025`});
+
+  const grand = sumRows(()=>true,2013,2025);
+  const cols = [{n:'2013',f:2013,t:2013}, ...PERIODS.map(p=>({n:p.n,f:p.from,t:p.to}))];
+  let h = `<thead><tr><th>Landsdel</th>${cols.map(c=>`<th>${c.n}</th>`).join('')}<th>2013–2025</th><th>Andel</th></tr></thead><tbody>`;
+  regs.forEach(L=>{
+    const tot = sumRows(r=>r.l===L,2013,2025);
+    h += `<tr><td><span class="sw" style="background:var(${COLORS.l[L]})"></span>${L}</td>` +
+      cols.map(c=>{const v=sumRows(r=>r.l===L,c.f,c.t);return `<td class="${v?'':'z'}">${v?fmt(v):'–'}</td>`;}).join('') +
+      `<td><b>${tot?fmt(tot):'–'}</b></td><td class="${tot?'':'z'}">${grand?new Intl.NumberFormat('nb-NO',{maximumFractionDigits:0}).format(tot/grand*100)+' %':'–'}</td></tr>`;
+  });
+  h += `</tbody><tfoot><tr><td>Totalt</td>${cols.map(c=>`<td>${fmt(sumRows(()=>true,c.f,c.t))}</td>`).join('')}<td>${fmt(grand)}</td><td>${grand?'100 %':'–'}</td></tr></tfoot>`;
+  $('regionTable').innerHTML = h;
+}
+
 function legend(el, list){ list = list.filter(s=>s.v.some(x=>x>0));
   el.innerHTML = list.length>1 ? list.map(s=>`<span><i style="background:var(${s.color})"></i>${s.name}</span>`).join('') : '';
 }
@@ -372,6 +457,8 @@ function render(){
   pth += `</tbody><tfoot><tr><td>Totalt</td>${pt.map(v=>`<td>${fmt(v)}</td>`).join('')}</tr>`;
   pth += `<tr><td style="font-weight:500;color:var(--text-2)">Snitt per år</td>${pt.map(v=>`<td style="font-weight:500;color:var(--text-2)">${fmt(v/4)}</td>`).join('')}</tr></tfoot>`;
   $('periodTable').innerHTML = pth;
+
+  renderRegions();
 
   // Årstabell
   $('tableSub').textContent = state.mode==='vei'
