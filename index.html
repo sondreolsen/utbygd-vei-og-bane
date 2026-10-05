@@ -76,6 +76,8 @@ th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:
 thead th{font-weight:600;color:var(--text-2);font-size:12px}
 tfoot td{font-weight:700;border-top:1px solid var(--border);border-bottom:0}
 td.z{color:var(--muted)}
+th.prog,td.prog{font-style:italic;background:var(--grid)}
+td.foot-note{font-weight:400;font-size:12px;color:var(--muted);text-align:left;position:static;border:0;padding-top:8px}
 .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:0}
 .note{font-size:13px;color:var(--text-2)}
 .note p{margin:0 0 8px}
@@ -177,7 +179,7 @@ td.z{color:var(--muted)}
     <h2>Om tallene</h2>
     <p><b>Vei:</b> Kilometer riksvei åpnet for trafikk, fordelt på landsdel, utbygger (Statens vegvesen / Nye Veier) og veitype. To/tre-feltsvei er inkludert i tallet for tofeltsvei. Prosjekter som krysser fylkesgrenser er fordelt skjønnsmessig.</p>
     <p><b>Bane:</b> Kilometer jernbane åpnet for trafikk, fordelt på landsdel. All ny jernbane i oversikten er dobbeltsporet. Oversikten gjelder bare ny jernbane i ny trasé, og tar ikke med oppgraderinger, fornying, nye kryssingsspor eller nye spor i terminalområder.</p>
-    <p><b>Avgrensning:</b> Svaret inneholder også en prognose for 2026. Den er ikke tatt med her, fordi siden viser 2013 til og med 2025. 2013 er med i årsoversikten, men inngår ikke i noen av periodene (2014–2017, 2018–2021, 2022–2025). Sørlandet har ingen ny jernbane og Nord-Norge ingen jernbane i perioden.</p>
+    <p><b>Avgrensning:</b> Svaret inneholder også en prognose for 2026. Den vises bare i tabellen med kilometer per år, og er med i summen der (2013–2026). Prognosen inngår ikke i periodene, diagrammene, nøkkeltallene eller oversikten per landsdel. For jernbane gjelder 2026-tallet Nykirke–Barkåker, som ventes åpnet høsten 2026. 2013 er med i årsoversikten, men inngår ikke i noen av periodene (2014–2017, 2018–2021, 2022–2025). Sørlandet har ingen ny jernbane og Nord-Norge ingen jernbane i perioden.</p>
     <p><b>Kilde:</b> Samferdselsdepartementet, <a href="kilde-svar-3935.pdf">svar på spørsmål nr. 3935 til skriftlig besvarelse</a> (ref. 26/3835), 5. oktober 2026.</p>
   </section>
 </div>
@@ -226,6 +228,16 @@ const RAIL = [
   {l:'Trøndelag',  v:[0,0,0,1.5,0,0,0,0,0,0,0,0,0]},
   {l:'Nord-Norge', v:[0,0,0,0,0,0,0,0,0,0,0,0,0]},
 ];
+// Prognose 2026 – vises kun i årstabellen (inngår ikke i perioder, diagrammer eller nøkkeltall)
+const ROAD_2026 = {
+  'Østlandet|Statens vegvesen|Tofeltsvei':6.2, 'Østlandet|Nye Veier|Firefeltsvei':17.0,
+  'Sørlandet|Statens vegvesen|Tofeltsvei':11.7, 'Vestlandet|Statens vegvesen|Firefeltsvei':2.8,
+  'Trøndelag|Statens vegvesen|Tofeltsvei':8.0, 'Trøndelag|Nye Veier|Firefeltsvei':34.0,
+  'Nord-Norge|Statens vegvesen|Tofeltsvei':1.0,
+};
+const RAIL_2026 = {'Østlandet':13.6}; // Nykirke–Barkåker, ventet åpnet høsten 2026
+ROAD.forEach(r=>r.p26 = ROAD_2026[`${r.l}|${r.u}|${r.t}`]||0);
+RAIL.forEach(r=>r.p26 = RAIL_2026[r.l]||0);
 
 const COLORS = {
   l: {'Østlandet':'--s1','Sørlandet':'--s2','Vestlandet':'--s3','Trøndelag':'--s4','Nord-Norge':'--s5'},
@@ -462,16 +474,19 @@ function render(){
 
   // Årstabell
   $('tableSub').textContent = state.mode==='vei'
-    ? `Kilometer riksvei per år fordelt på landsdel, utbygger og veitype${ft}.`
-    : `Kilometer jernbane per år fordelt på landsdel${ft}.`;
+    ? `Kilometer riksvei per år fordelt på landsdel, utbygger og veitype${ft}. 2026 er prognose og inngår i summen, men ikke i periodene.`
+    : `Kilometer jernbane per år fordelt på landsdel${ft}. 2026 er prognose og inngår i summen, men ikke i periodene.`;
   const rs = rows();
-  let h = `<thead><tr><th>${state.mode==='vei'?'Landsdel / utbygger / veitype':'Landsdel'}</th>${YEARS.map(y=>`<th>${y}</th>`).join('')}<th>Sum</th></tr></thead><tbody>`;
-  rs.filter(r=>r.v.some(x=>x>0)).forEach(r=>{
-    const sum=r.v.reduce((a,b)=>a+b,0);
+  const cell = v => `<td class="${v?'':'z'}">${v?fmt(v):'–'}</td>`;
+  const tot26 = rs.reduce((a,r)=>a+r.p26,0);
+  let h = `<thead><tr><th>${state.mode==='vei'?'Landsdel / utbygger / veitype':'Landsdel'}</th>${YEARS.map(y=>`<th>${y}</th>`).join('')}<th class="prog">2026*</th><th>Sum 2013–2026</th></tr></thead><tbody>`;
+  rs.filter(r=>r.v.some(x=>x>0)||r.p26>0).forEach(r=>{
+    const sum=r.v.reduce((a,b)=>a+b,0)+r.p26;
     const name = state.mode==='vei' ? `${r.l} · ${r.u} · ${r.t.toLowerCase()}` : r.l;
-    h+=`<tr><td>${name}</td>${r.v.map(v=>`<td class="${v?'':'z'}">${v?fmt(v):'–'}</td>`).join('')}<td><b>${sum?fmt(sum):'–'}</b></td></tr>`;
+    h+=`<tr><td>${name}</td>${r.v.map(cell).join('')}${cell(r.p26).replace('<td class="','<td class="prog ')}<td><b>${sum?fmt(sum):'–'}</b></td></tr>`;
   });
-  h+=`</tbody><tfoot><tr><td>Totalt</td>${totalByYear.map(v=>`<td>${fmt(v)}</td>`).join('')}<td>${fmt(tot)}</td></tr></tfoot>`;
+  h+=`</tbody><tfoot><tr><td>Totalt</td>${totalByYear.map(v=>`<td>${fmt(v)}</td>`).join('')}<td class="prog">${fmt(tot26)}</td><td>${fmt(tot+tot26)}</td></tr>`;
+  h+=`<tr><td colspan="${YEARS.length+3}" class="foot-note">* Prognose for 2026 fra departementets svar.</td></tr></tfoot>`;
   $('annualTable').innerHTML = h;
 }
 
