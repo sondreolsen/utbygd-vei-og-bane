@@ -187,7 +187,7 @@ td.foot-note{font-weight:400;font-size:12px;color:var(--muted);text-align:left;p
     <h2>Om tallene</h2>
     <p><b>Vei:</b> Kilometer riksvei åpnet for trafikk, fordelt på landsdel, utbygger (Statens vegvesen / Nye Veier) og veitype. To/tre-feltsvei er inkludert i tallet for tofeltsvei. Prosjekter som krysser fylkesgrenser er fordelt skjønnsmessig.</p>
     <p><b>Bane:</b> Kilometer jernbane åpnet for trafikk, fordelt på landsdel. All ny jernbane i oversikten er dobbeltsporet. Oversikten gjelder bare ny jernbane i ny trasé, og tar ikke med oppgraderinger, fornying, nye kryssingsspor eller nye spor i terminalområder.</p>
-    <p><b>Avgrensning:</b> Svaret inneholder også en prognose for 2026. Den vises bare i tabellen med kilometer per år, og er med i summen der (2013–2026). Prognosen inngår ikke i periodene, diagrammene, nøkkeltallene eller oversikten per landsdel. For jernbane gjelder 2026-tallet Nykirke–Barkåker, som ventes åpnet høsten 2026. 2013 er med i årsoversikten, men inngår ikke i noen av periodene (2014–2017, 2018–2021, 2022–2025). Sørlandet har ingen ny jernbane og Nord-Norge ingen jernbane i perioden.</p>
+    <p><b>Avgrensning:</b> Svaret inneholder også en prognose for 2026. Den vises bare i det årlige søylediagrammet (lysere søyle) og i tabellen med kilometer per år, der den også er med i summen (2013–2026). Prognosen inngår ikke i periodene, nøkkeltallene eller oversikten per landsdel. For jernbane gjelder 2026-tallet Nykirke–Barkåker, som ventes åpnet høsten 2026. 2013 er med i årsoversikten, men inngår ikke i noen av periodene (2014–2017, 2018–2021, 2022–2025). Sørlandet har ingen ny jernbane og Nord-Norge ingen jernbane i perioden.</p>
     <p><b>Kilde:</b> Samferdselsdepartementet, <a href="kilde-svar-3935.pdf">svar på spørsmål nr. 3935 til skriftlig besvarelse</a> (ref. 26/3835), 5. oktober 2026.</p>
   </section>
 </div>
@@ -274,7 +274,8 @@ function series(){
   let cats = CATS[g];
   if(filt[g]) cats = cats.filter(c=>c===filt[g]);
   const rs = rows();
-  const out = cats.map(c=>({name:c, color:COLORS[g][c], v:YEARS.map((_,i)=>rs.filter(r=>r[g]===c).reduce((a,r)=>a+r.v[i],0))}));
+  const out = cats.map(c=>({name:c, color:COLORS[g][c], v:YEARS.map((_,i)=>rs.filter(r=>r[g]===c).reduce((a,r)=>a+r.v[i],0)),
+    p26: rs.filter(r=>r[g]===c).reduce((a,r)=>a+r.p26,0)}));
   return {g, list: out};
 }
 const sumYears = (v, from, to) => YEARS.reduce((a,y,i)=>a+(y>=from&&y<=to?v[i]:0),0);
@@ -327,7 +328,10 @@ function stackedBars(el, labels, list, getVal, opts){
     s+=`<text x="${m.l-8}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${new Intl.NumberFormat('nb-NO').format(v)}</text>`;
   }
   s+=`<text x="${m.l-8}" y="12" text-anchor="end" font-size="11" fill="var(--muted)">km</text>`;
+  labels.forEach((lab,i)=>{ s+=`<rect class="hit" data-i="${i}" x="${m.l+band*i}" y="${m.t}" width="${band}" height="${ih}" fill="transparent"/>`; });
+  s+=`<g pointer-events="none">`;
   labels.forEach((lab,i)=>{
+    const prog = opts.prog && opts.prog.includes(i), op = prog ? ` fill-opacity=".45"` : "";
     const cx = m.l + band*i + band/2, x0 = cx-bw/2;
     let acc=0;
     const segs = list.map(sr=>({sr, v:getVal(sr,i)})).filter(d=>d.v>0);
@@ -340,21 +344,20 @@ function stackedBars(el, labels, list, getVal, opts){
       const hh = Math.max(0.5, h-gap);
       const yy = y1;
       if(r>0){
-        s+=`<path d="M${x0},${yy+hh} V${yy+r} Q${x0},${yy} ${x0+r},${yy} H${x0+bw-r} Q${x0+bw},${yy} ${x0+bw},${yy+r} V${yy+hh} Z" fill="var(${d.sr.color})"/>`;
+        s+=`<path d="M${x0},${yy+hh} V${yy+r} Q${x0},${yy} ${x0+r},${yy} H${x0+bw-r} Q${x0+bw},${yy} ${x0+bw},${yy+r} V${yy+hh} Z" fill="var(${d.sr.color})"${op}/>`;
       } else {
-        s+=`<rect x="${x0}" y="${yy}" width="${bw}" height="${hh}" fill="var(${d.sr.color})"/>`;
+        s+=`<rect x="${x0}" y="${yy}" width="${bw}" height="${hh}" fill="var(${d.sr.color})"${op}/>`;
       }
     });
     if(totals[i]>0) s+=`<text x="${cx}" y="${y(totals[i])-6}" text-anchor="middle" font-size="${opts.valFont||11}" font-weight="600" fill="var(--text)">${fmt(totals[i])}</text>`;
     s+=`<text x="${cx}" y="${H-8}" text-anchor="middle" font-size="${opts.labFont||11}" fill="var(--text-2)">${opts.short?opts.short(lab):lab}</text>`;
-    s+=`<rect class="hit" data-i="${i}" x="${m.l+band*i}" y="${m.t}" width="${band}" height="${ih}" fill="transparent"/>`;
   });
-  s+=`<line x1="${m.l}" x2="${W-m.r}" y1="${y(0)}" y2="${y(0)}" stroke="var(--border)" stroke-width="1"/>`;
+  s+=`</g><line x1="${m.l}" x2="${W-m.r}" y1="${y(0)}" y2="${y(0)}" stroke="var(--border)" stroke-width="1" pointer-events="none"/>`;
   s+='</svg>';
   el.innerHTML=s;
   el.querySelectorAll('.hit').forEach(r=>{
     const i=+r.dataset.i;
-    const on=e=>{ showTip(e, tipHtml(opts.tipTitle(labels[i]), list, sr=>getVal(sr,i))); r.setAttribute('fill','var(--grid)'); r.setAttribute('fill-opacity','.35'); };
+    const on=e=>{ showTip(e, tipHtml(opts.tipTitle(labels[i]), list, sr=>getVal(sr,i))); r.setAttribute('fill','var(--grid)'); r.setAttribute('fill-opacity','.6'); };
     r.addEventListener('mousemove',on); r.addEventListener('touchstart',e=>on(e.touches[0]),{passive:true});
     r.addEventListener('mouseleave',()=>{hideTip(); r.setAttribute('fill','transparent');});
   });
@@ -371,6 +374,8 @@ function hBars(el, labels, list, getVal, opts){
   const x = v => m.l + v/max*iw;
   const bh = 22;
   let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${opts.aria}">`;
+  labels.forEach((lab,i)=>{ s+=`<rect class="hit" data-i="${i}" x="0" y="${m.t+rowH*i}" width="${W}" height="${rowH}" fill="transparent" rx="6"/>`; });
+  s+=`<g pointer-events="none">`;
   labels.forEach((lab,i)=>{
     const cy = m.t + rowH*i + rowH/2, y0 = cy-bh/2;
     s+=`<text x="${m.l-10}" y="${cy+4}" text-anchor="end" font-size="13" fill="var(--text-2)">${lab}</text>`;
@@ -384,13 +389,12 @@ function hBars(el, labels, list, getVal, opts){
         : `<rect x="${xa}" y="${y0}" width="${w}" height="${bh}" fill="var(${d.sr.color})"/>`;
     });
     s+=`<text x="${x(totals[i])+8}" y="${cy+4}" font-size="13" font-weight="600" fill="var(--text)">${totals[i]?fmt(totals[i]):'0'}</text>`;
-    s+=`<rect class="hit" data-i="${i}" x="0" y="${m.t+rowH*i}" width="${W}" height="${rowH}" fill="transparent"/>`;
   });
-  s+=`<line x1="${m.l}" x2="${m.l}" y1="${m.t}" y2="${H-m.b}" stroke="var(--border)"/></svg>`;
+  s+=`</g><line x1="${m.l}" x2="${m.l}" y1="${m.t}" y2="${H-m.b}" stroke="var(--border)" pointer-events="none"/></svg>`;
   el.innerHTML = s;
   el.querySelectorAll('.hit').forEach(r=>{
     const i=+r.dataset.i;
-    const on=e=>{ showTip(e, tipHtml(opts.tipTitle(labels[i]), list, sr=>getVal(sr,i))); r.setAttribute('fill','var(--grid)'); r.setAttribute('fill-opacity','.35'); };
+    const on=e=>{ showTip(e, tipHtml(opts.tipTitle(labels[i]), list, sr=>getVal(sr,i))); r.setAttribute('fill','var(--grid)'); r.setAttribute('fill-opacity','.6'); };
     r.addEventListener('mousemove',on); r.addEventListener('touchstart',e=>on(e.touches[0]),{passive:true});
     r.addEventListener('mouseleave',()=>{hideTip(); r.setAttribute('fill','transparent');});
   });
@@ -458,12 +462,16 @@ function render(){
 
   // Årlig
   $('annualTitle').textContent = `Ny ${what} åpnet for trafikk per år`;
-  $('annualSub').textContent = `Kilometer per år 2013–2025, fordelt på ${GROUPNAME[g]}${ft}. Hold over en søyle for detaljer.`;
+  $('annualSub').textContent = `Kilometer per år 2013–2026, fordelt på ${GROUPNAME[g]}${ft}. 2026* er prognose og vises med lysere farge. Hold over en søyle for detaljer.`;
   legend($('legend1'), list);
   const narrow = $('annual').clientWidth < 560;
-  stackedBars($('annual'), YEARS, list, (s,i)=>s.v[i], {
-    height: narrow?300:360, maxBar:44, aria:`Søylediagram: km ny ${what} per år`,
-    short: y=> narrow ? "'"+String(y).slice(2) : y, tipTitle: y=>`${y}`
+  // 2026 (prognose) vises som siste søyle med svakere farge
+  const yearsWith26 = [...YEARS, 2026];
+  stackedBars($('annual'), yearsWith26, list, (s,i)=> i<YEARS.length ? s.v[i] : s.p26, {
+    height: narrow?300:360, maxBar:44, aria:`Søylediagram: km ny ${what} per år, 2026 er prognose`,
+    prog: [YEARS.length],
+    short: y=> (narrow ? "'"+String(y).slice(2) : y) + (y===2026?'*':''),
+    tipTitle: y=> y===2026 ? '2026 (prognose)' : `${y}`
   });
 
   // Perioder
